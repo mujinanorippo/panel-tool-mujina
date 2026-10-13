@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>パネル開けツール</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700&family=Noto+Sans+JP:wght@700&family=Noto+Serif+JP:wght@700&family=Yusei+Magic&display=swap">
+<style>
+:root{
+  --bg:#faf7f5; --panel:#ffffff; --ink:#3a2f2f; --sub:#8a7d7d;
+  --accent:#ff8fab; --accent-ink:#ffffff; --line:#e8dedd;
+  --good:#7fbf8f; --warn:#e0a15c; --danger:#e07a8f;
+  --shadow:0 2px 10px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#231e1f; --panel:#2d2626; --ink:#f2e9e8; --sub:#b6a8a7;
+    --accent:#ff8fab; --accent-ink:#231e1f; --line:#453b3b;
+    --good:#6fae7f; --warn:#d0904c; --danger:#d06a7f;
+    --shadow:0 2px 10px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#231e1f; --panel:#2d2626; --ink:#f2e9e8; --sub:#b6a8a7;
+  --accent:#ff8fab; --accent-ink:#231e1f; --line:#453b3b;
+  --good:#6fae7f; --warn:#d0904c; --danger:#d06a7f;
+  --shadow:0 2px 10px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;}
+body{margin:0; background:var(--bg); color:var(--ink);}
+#app{max-width:1200px; margin:0 auto; padding:16px; font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI",sans-serif;}
+h1{font-size:18px; margin:4px 0 14px;}
+h2{font-size:14px; margin:0 0 8px; color:var(--sub);}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; box-shadow:var(--shadow);}
+.row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+label.field{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--sub); flex:1; min-width:140px;}
+input[type=file]{font-size:12px;}
+input[type=number]{width:64px; padding:6px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink);}
+input[type=text]{padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font-size:13px; width:100%;}
+input[type=color]{width:40px; height:32px; border:none; border-radius:8px; padding:0; background:none;}
+select{padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font-size:13px;}
+button{border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:9px; padding:7px 12px; font-size:13px; cursor:pointer;}
+button:hover{border-color:var(--accent);}
+button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600;}
+button.small{padding:4px 8px; font-size:12px;}
+button:disabled{opacity:.4; cursor:not-allowed;}
+.radio-group{display:flex; gap:14px;}
+.radio-group label{display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer;}
+.hint{font-size:11px; color:var(--sub); line-height:1.5;}
+#layout{display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;}
+#stageWrap{flex:2; min-width:300px;}
+#stage{position:relative; width:100%; background:repeating-conic-gradient(#0000 0% 25%, #0000004d 0% 50%) 0 0/16px 16px; border-radius:12px; overflow:hidden; touch-action:none;}
+#stage canvas{position:absolute; top:0; left:0; width:100%; height:auto; display:block;}
+#sidebar{flex:1; min-width:280px;}
+.pieceRow{border:1px solid var(--line); border-radius:10px; padding:8px; margin-bottom:8px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; background:var(--bg);}
+.numBadge{width:30px; height:30px; border-radius:8px; background:var(--panel); border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; cursor:pointer; flex-shrink:0;}
+.numBadge.linking{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent) inset;}
+.numBadge.unlinked{border-color:var(--warn); color:var(--warn);}
+.countDisp{min-width:26px; text-align:center; font-weight:700;}
+.miniInput{width:46px; padding:5px; border:1px solid var(--line); border-radius:7px; background:var(--panel); color:var(--ink); font-size:12px;}
+.rowLabel{width:100%;}
+[hidden]{display:none!important;}
+#toolbar{margin-bottom:10px;}
+.tag{display:inline-block; font-size:11px; padding:2px 7px; border-radius:99px; background:var(--line); color:var(--sub); margin-left:6px;}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <h1>パネル開けツール</h1>
+
+  <div class="card" id="setup">
+    <h2>モード</h2>
+    <div class="row">
+      <div class="radio-group">
+        <label><input type="radio" name="mode" value="A" checked> 立ち絵＋背景合成</label>
+        <label><input type="radio" name="mode" value="B"> 1枚絵まるごと</label>
+      </div>
+    </div>
+
+    <h2>画像</h2>
+    <div class="row">
+      <label class="field">立ち絵（背景透過PNG・必須）
+        <input type="file" id="fileChar" accept="image/png">
+      </label>
+      <label class="field">背景イラスト（任意）
+        <input type="file" id="fileBg" accept="image/*">
+      </label>
+      <label class="field">背景色
+        <input type="color" id="colorBg" value="#ffffff">
+      </label>
+      <label class="field">全体イラスト（モードB用）
+        <input type="file" id="fileFull" accept="image/*">
+      </label>
+      <label class="field">パネルの色
+        <input type="color" id="colorPanel" value="#333333">
+      </label>
+    </div>
+    <div class="hint">重なり順は、背景色 → 背景イラスト → 立ち絵/全体イラスト → パネルです。ピースが開くと、下のイラストが見えます。</div>
+
+    <h2>分割方法</h2>
+    <div class="row">
+      <div class="radio-group">
+        <label><input type="radio" name="split" value="grid" checked> グリッド</label>
+        <label><input type="radio" name="split" value="free"> フリーハンド</label>
+      </div>
+      <label class="field" id="gridInputs">行×列
+        <span class="row" style="margin:0;">
+          <input type="number" id="gridRows" min="1" max="12" value="3"> ×
+          <input type="number" id="gridCols" min="1" max="12" value="3">
+        </span>
+      </label>
+      <label class="field">分割線の色
+        <input type="color" id="colorLine" value="#ff5c8a">
+      </label>
+    </div>
+
+    <button class="primary" id="startBtn">開始</button>
+    <div class="hint" id="setupError" style="color:var(--danger);"></div>
+  </div>
+
+  <div id="layout" hidden>
+    <div id="stageWrap">
+      <div class="card" id="toolbar">
+        <div id="gridToolbar" hidden>
+          <div class="row">
+            <span class="hint">線をドラッグして位置を調整してください。</span>
+            <button class="primary small" id="confirmGridBtn">確定</button>
+            <button class="small" id="backFromGrid">戻る</button>
+          </div>
+        </div>
+        <div id="freeToolbar" hidden>
+          <div class="row">
+            <span class="hint">境界線を描いてピースを区切ってください。</span>
+            <button class="small" id="undoLineBtn">1本戻す</button>
+            <button class="primary small" id="confirmFreeBtn">確定</button>
+            <button class="small" id="backFromFree">戻る</button>
+          </div>
+        </div>
+        <div id="doneToolbar" hidden>
+          <div class="row">
+            <span class="hint" id="doneHint"></span>
+            <button class="primary" id="exportBtn">PNGを出力</button>
+            <button class="small" id="restartBtn">最初からやり直す</button>
+          </div>
+          <div class="row">
+            <label class="field">フォント
+              <select id="textFont">
+                <option value="'M PLUS Rounded 1c', sans-serif">丸ゴシック</option>
+                <option value="'Noto Sans JP', sans-serif">ゴシック</option>
+                <option value="'Noto Serif JP', serif">明朝</option>
+                <option value="'Yusei Magic', sans-serif">手書き風</option>
+              </select>
+            </label>
+            <label class="field">文字サイズ
+              <input type="number" id="textSize" min="8" max="120" value="32">
+            </label>
+            <label class="field">文字色
+              <input type="color" id="textColor" value="#ffffff">
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="stage">
+          <canvas id="baseCanvas"></canvas>
+          <canvas id="topCanvas"></canvas>
+          <canvas id="overlayCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+    <div id="sidebar" hidden>
+      <div class="card">
+        <h2>ピース一覧<span class="tag" id="pieceCountTag"></span></h2>
+        <div class="hint">番号をクリックしてからピースをクリックすると、割り当てを変更できます。</div>
+        <div id="pieceList" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const WORK_MAX = 1100;
+
+  const el = id => document.getElementById(id);
+  const setup = el('setup');
+  const layout = el('layout');
+  const sidebar = el('sidebar');
+  const gridToolbar = el('gridToolbar');
+  const freeToolbar = el('freeToolbar');
+  const doneToolbar = el('doneToolbar');
+  const stage = el('stage');
+  const baseCanvas = el('baseCanvas');
+  const topCanvas = el('topCanvas');
+  const overlayCanvas = el('overlayCanvas');
+
+  let state = null;
+
+  function loadImageFile(input){
+    return new Promise((resolve)=>{
+      const f = input.files && input.files[0];
+      if(!f){ resolve(null); return; }
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = e => { img.onload = ()=>resolve(img); img.onerror = ()=>resolve(null); img.src = e.target.result; };
+      reader.onerror = ()=>resolve(null);
+      reader.readAsDataURL(f);
+    });
+  }
+
+  function fitSize(w,h){
+    const scale = Math.min(1, WORK_MAX / Math.max(w,h));
+    return { w: Math.max(1, Math.round(w*scale)), h: Math.max(1, Math.round(h*scale)) };
+  }
+
+  function drawImageCover(ctx, img, w, h){
+    const s = Math.max(w/img.width, h/img.height);
+    const dw = img.width*s, dh = img.height*s;
+    ctx.drawImage(img, (w-dw)/2, (h-dh)/2, dw, dh);
+  }
+  function drawImageContain(ctx, img, w, h){
+    const s = Math.min(w/img.width, h/img.height);
+    const dw = img.width*s, dh = img.height*s;
+    ctx.drawImage(img, (w-dw)/2, (h-dh)/2, dw, dh);
+  }
+  function hexToRgb(hex){
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex||'#333333');
+    if(!m) return {r:51,g:51,b:51};
+    return { r:parseInt(m[1],16), g:parseInt(m[2],16), b:parseInt(m[3],16) };
+  }
+
+  el('startBtn').addEventListener('click', async ()=>{
+    el('setupError').textContent = '';
+    const mode = document.querySelector('input[name=mode]:checked').value;
+    const split = document.querySelector('input[name=split]:checked').value;
+
+    const [charImg, bgImg, fullImg] = await Promise.all([
+      loadImageFile(el('fileChar')), loadImageFile(el('fileBg')), loadImageFile(el('fileFull'))
+    ]);
+
+    if(mode==='A' && !charImg){ el('setupError').textContent = '立ち絵（背景透過)の画像を選択してください。'; return; }
+    if(mode==='B' && !fullImg){ el('setupError').textContent = '全体イラストを選択してください。'; return; }
+
+    const mainImg = mode==='A' ? charImg : fullImg;
+    const {w,h} = fitSize(mainImg.width, mainImg.height);
+
+    [baseCanvas, topCanvas, overlayCanvas].forEach(c=>{ c.width=w; c.height=h; });
+    stage.style.aspectRatio = (w/h);
+
+    const revealCanvas = document.createElement('canvas');
+    revealCanvas.width=w; revealCanvas.height=h;
+    const rctx = revealCanvas.getContext('2d');
+    rctx.clearRect(0,0,w,h);
+    drawImageContain(rctx, mainImg, w, h);
+    const revealAlpha = rctx.getImageData(0,0,w,h);
+
+    let maskData = new Uint8Array(w*h);
+    if(mode==='A'){
+      for(let i=0;i<w*h;i++){ maskData[i] = revealAlpha.data[i*4+3] > 15 ? 1 : 0; }
+    } else {
+      maskData.fill(1);
+    }
+
+    const bctx = baseCanvas.getContext('2d');
+    bctx.clearRect(0,0,w,h);
+    const bgColor = el('colorBg').value;
+    bctx.fillStyle = bgColor;
+    bctx.fillRect(0,0,w,h);
+    if(mode==='A' && bgImg){
+      drawImageCover(bctx, bgImg, w, h);
+    }
+    bctx.drawImage(revealCanvas, 0, 0);
+
+    const panelColor = hexToRgb(el('colorPanel').value);
+    const panelData = new ImageData(w,h);
+    for(let i=0;i<w*h;i++){
+      if(maskData[i]){
+        panelData.data[i*4]=panelColor.r; panelData.data[i*4+1]=panelColor.g; panelData.data[i*4+2]=panelColor.b; panelData.data[i*4+3]=255;
+      }
+    }
+
+    state = {
+      mode, split, w, h,
+      bgColor,
+      lineColor: el('colorLine').value,
+      textFont: el('textFont').value,
+      textSize: parseInt(el('textSize').value)||32,
+      textColor: el('textColor').value,
+      panelData, maskData,
+      pieceMap: null,
+      pieces: {},
+      rows: [],
+      gridRows: parseInt(el('gridRows').value)||1,
+      gridCols: parseInt(el('gridCols').value)||1,
+      gridLinesX: [], gridLinesY: [],
+      freehandStrokes: [],
+      barrierCanvas: null,
+      linkingRowIndex: null,
+      dragLine: null,
+      confirmed: false,
+    };
+
+    state.gridLinesX = Array.from({length: state.gridCols-1}, (_,i)=> (i+1)/state.gridCols);
+    state.gridLinesY = Array.from({length: state.gridRows-1}, (_,i)=> (i+1)/state.gridRows);
+
+    const barrier = document.createElement('canvas');
+    barrier.width=w; barrier.height=h;
+    state.barrierCanvas = barrier;
+
+    topCanvas.getContext('2d').putImageData(panelData,0,0);
+
+    setup.hidden = true;
+    layout.hidden = false;
+    if(split==='grid'){ gridToolbar.hidden=false; } else { freeToolbar.hidden=false; }
+    drawOverlay();
+  });
+
+  // ---------- overlay drawing ----------
+  function drawOverlay(){
+    const ctx = overlayCanvas.getContext('2d');
+    ctx.clearRect(0,0,state.w,state.h);
+    if(!state.confirmed){
+      if(state.split==='grid'){ drawGridLinesOverlay(ctx); }
+      else { drawFreehandOverlay(ctx); }
+    } else {
+      drawPieceLabels(ctx);
+    }
+  }
+
+  function drawGridLinesOverlay(ctx){
+    ctx.strokeStyle = state.lineColor; ctx.lineWidth = 2;
+    for(const fx of state.gridLinesX){
+      const x = fx*state.w;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,state.h); ctx.stroke();
+    }
+    for(const fy of state.gridLinesY){
+      const y = fy*state.h;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(state.w,y); ctx.stroke();
+    }
+  }
+
+  function drawFreehandOverlay(ctx){
+    ctx.drawImage(state.barrierCanvas,0,0);
+  }
+
+  function drawPieceLabels(ctx){
+    const mainSize = state.textSize;
+    ctx.font = 'bold ' + mainSize + 'px ' + state.textFont;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(const row of state.rows){
+      const p = state.pieces[row.pieceId];
+      if(!p || p.hidden) continue;
+      const c = pieceCentroid(row.pieceId);
+      if(!c) continue;
+      const label = p.text || ('#'+row.rowNum);
+      ctx.lineWidth=Math.max(2, Math.round(mainSize/11)); ctx.strokeStyle='rgba(0,0,0,.55)'; ctx.fillStyle=state.textColor;
+      ctx.strokeText(label, c.x, c.y);
+      ctx.fillText(label, c.x, c.y);
+      if(p.numberVisible){
+        const subSize = Math.max(8, Math.round(mainSize*0.6));
+        ctx.font = 'bold ' + subSize + 'px ' + state.textFont;
+        ctx.strokeStyle='rgba(0,0,0,.55)'; ctx.fillStyle='#ffe066';
+        ctx.strokeText(String(p.count), c.x, c.y + mainSize*0.8);
+        ctx.fillText(String(p.count), c.x, c.y + mainSize*0.8);
+        ctx.font = 'bold ' + mainSize + 'px ' + state.textFont;
+      }
+      if(state.linkingRowIndex !== null){
+        ctx.save();
+        ctx.strokeStyle='rgba(255,143,171,.9)'; ctx.lineWidth=3;
+        ctx.strokeRect(c.bx, c.by, c.bw, c.bh);
+        ctx.restore();
+      }
+    }
+  }
+
+  const centroidCache = {};
+  function pieceCentroid(pieceId){
+    if(centroidCache[pieceId]) return centroidCache[pieceId];
+    let sx=0, sy=0, n=0, minx=1e9,miny=1e9,maxx=-1,maxy=-1;
+    const w=state.w, h=state.h, map=state.pieceMap;
+    for(let y=0;y<h;y+=2){
+      for(let x=0;x<w;x+=2){
+        if(map[y*w+x]===pieceId){
+          sx+=x; sy+=y; n++;
+          if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+        }
+      }
+    }
+    if(n===0) return null;
+    const c = {x: sx/n, y: sy/n, bx:minx, by:miny, bw:maxx-minx, bh:maxy-miny};
+    centroidCache[pieceId] = c;
+    return c;
+  }
+
+  function pieceIdAt(x,y){
+    x=Math.round(x); y=Math.round(y);
+    if(x<0||y<0||x>=state.w||y>=state.h) return 0;
+    return state.pieceMap[y*state.w+x];
+  }
+
+  // ---------- coordinate helper ----------
+  function canvasPoint(evt, canvas){
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width/rect.width, sy = canvas.height/rect.height;
+    return { x: (evt.clientX-rect.left)*sx, y: (evt.clientY-rect.top)*sy };
+  }
+
+  // ---------- grid dragging ----------
+  overlayCanvas.addEventListener('pointerdown', (e)=>{
+    if(state.confirmed){ onStagePointerDownConfirmed(e); return; }
+    if(state.split==='grid'){ onGridPointerDown(e); }
+    else { onFreePointerDown(e); }
+  });
+  overlayCanvas.addEventListener('pointermove', (e)=>{
+    if(state.confirmed) return;
+    if(state.split==='grid'){ onGridPointerMove(e); }
+    else { onFreePointerMove(e); }
+  });
+  window.addEventListener('pointerup', (e)=>{
+    if(!state) return;
+    if(state.split==='grid'){ state.dragLine=null; }
+    else { onFreePointerUp(e); }
+  });
+
+  function onGridPointerDown(e){
+    const p = canvasPoint(e, overlayCanvas);
+    const thresh = Math.max(8, state.w*0.015);
+    for(let i=0;i<state.gridLinesX.length;i++){
+      if(Math.abs(state.gridLinesX[i]*state.w - p.x) < thresh){ state.dragLine={axis:'x', idx:i}; return; }
+    }
+    for(let i=0;i<state.gridLinesY.length;i++){
+      if(Math.abs(state.gridLinesY[i]*state.h - p.y) < thresh){ state.dragLine={axis:'y', idx:i}; return; }
+    }
+  }
+  function onGridPointerMove(e){
+    if(!state.dragLine) return;
+    const p = canvasPoint(e, overlayCanvas);
+    const margin = 0.02;
+    if(state.dragLine.axis==='x'){
+      const arr = state.gridLinesX; const i = state.dragLine.idx;
+      const lo = i===0?margin:arr[i-1]+margin;
+      const hi = i===arr.length-1?1-margin:arr[i+1]-margin;
+      arr[i] = Math.min(hi, Math.max(lo, p.x/state.w));
+    } else {
+      const arr = state.gridLinesY; const i = state.dragLine.idx;
+      const lo = i===0?margin:arr[i-1]+margin;
+      const hi = i===arr.length-1?1-margin:arr[i+1]-margin;
+      arr[i] = Math.min(hi, Math.max(lo, p.y/state.h));
+    }
+    drawOverlay();
+  }
+
+  // ---------- freehand drawing ----------
+  let curStroke = null;
+  function onFreePointerDown(e){
+    const p = canvasPoint(e, overlayCanvas);
+    curStroke = [p];
+    e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId);
+  }
+  function onFreePointerMove(e){
+    if(!curStroke) return;
+    const p = canvasPoint(e, overlayCanvas);
+    curStroke.push(p);
+    const bctx = state.barrierCanvas.getContext('2d');
+    bctx.strokeStyle=state.lineColor; bctx.lineWidth=Math.max(3, Math.round(state.w/220));
+    bctx.lineCap='round'; bctx.lineJoin='round';
+    const n=curStroke.length;
+    bctx.beginPath();
+    bctx.moveTo(curStroke[n-2].x, curStroke[n-2].y);
+    bctx.lineTo(curStroke[n-1].x, curStroke[n-1].y);
+    bctx.stroke();
+    drawOverlay();
+  }
+  function onFreePointerUp(e){
+    if(!curStroke) return;
+    if(curStroke.length>1){ state.freehandStrokes.push(curStroke); }
+    curStroke=null;
+  }
+
+  el('undoLineBtn').addEventListener('click', ()=>{
+    state.freehandStrokes.pop();
+    redrawBarrierFromStrokes();
+    drawOverlay();
+  });
+  function redrawBarrierFromStrokes(){
+    const bctx = state.barrierCanvas.getContext('2d');
+    bctx.clearRect(0,0,state.w,state.h);
+    bctx.strokeStyle=state.lineColor; bctx.lineWidth=Math.max(3, Math.round(state.w/220));
+    bctx.lineCap='round'; bctx.lineJoin='round';
+    for(const s of state.freehandStrokes){
+      bctx.beginPath(); bctx.moveTo(s[0].x, s[0].y);
+      for(let i=1;i<s.length;i++) bctx.lineTo(s[i].x, s[i].y);
+      bctx.stroke();
+    }
+  }
+
+  el('backFromGrid').addEventListener('click', resetToSetup);
+  el('backFromFree').addEventListener('click', resetToSetup);
+  el('restartBtn').addEventListener('click', resetToSetup);
+  function resetToSetup(){
+    layout.hidden = true; sidebar.hidden = true;
+    gridToolbar.hidden = true; freeToolbar.hidden = true; doneToolbar.hidden = true;
+    setup.hidden = false;
+    el('pieceList').innerHTML='';
+    state = null;
+  }
+
+  // ---------- confirm grid ----------
+  el('confirmGridBtn').addEventListener('click', ()=>{
+    const w=state.w, h=state.h;
+    const xs = [0, ...state.gridLinesX, 1].map(f=>Math.round(f*w));
+    const ys = [0, ...state.gridLinesY, 1].map(f=>Math.round(f*h));
+    const map = new Int32Array(w*h);
+    const idOf = {};
+    let nextId = 1;
+    for(let y=0;y<h;y++){
+      let ry=0; while(ry<ys.length-2 && y>=ys[ry+1]) ry++;
+      for(let x=0;x<w;x++){
+        const i = y*w+x;
+        if(!state.maskData[i]){ map[i]=0; continue; }
+        let rx=0; while(rx<xs.length-2 && x>=xs[rx+1]) rx++;
+        const key = ry*state.gridCols+rx;
+        if(!(key in idOf)) idOf[key]=nextId++;
+        map[i]=idOf[key];
+      }
+    }
+    finalizePieces(map, nextId-1);
+  });
+
+  // ---------- confirm freehand (flood fill) ----------
+  el('confirmFreeBtn').addEventListener('click', ()=>{
+    const w=state.w, h=state.h;
+    const bctx = state.barrierCanvas.getContext('2d');
+    const bdata = bctx.getImageData(0,0,w,h).data;
+    const blocked = new Uint8Array(w*h);
+    for(let i=0;i<w*h;i++){ blocked[i] = bdata[i*4+3] > 40 ? 1 : 0; }
+
+    const map = new Int32Array(w*h);
+    let nextId = 0;
+    const queue = new Int32Array(w*h);
+    for(let start=0; start<w*h; start++){
+      if(map[start]!==0 || blocked[start] || !state.maskData[start]) continue;
+      nextId++;
+      let qh=0, qt=0;
+      queue[qt++] = start; map[start]=nextId;
+      while(qh<qt){
+        const cur = queue[qh++];
+        const cx = cur % w, cy = (cur - cx)/w;
+        const neigh = [];
+        if(cx>0) neigh.push(cur-1);
+        if(cx<w-1) neigh.push(cur+1);
+        if(cy>0) neigh.push(cur-w);
+        if(cy<h-1) neigh.push(cur+w);
+        for(const nb of neigh){
+          if(map[nb]===0 && !blocked[nb] && state.maskData[nb]){
+            map[nb]=nextId; queue[qt++]=nb;
+          }
+        }
+      }
+    }
+    finalizePieces(map, nextId);
+  });
+
+  function finalizePieces(map, maxId){
+    const w=state.w, h=state.h;
+    const area = new Array(maxId+1).fill(0);
+    for(let i=0;i<map.length;i++){ if(map[i]>0) area[map[i]]++; }
+    const minArea = Math.max(20, Math.round(w*h*0.0008));
+    let newId=1;
+    const remap = new Array(maxId+1).fill(0);
+    for(let id=1; id<=maxId; id++){
+      if(area[id] >= minArea){ remap[id]=newId; newId++; }
+    }
+    const finalMap = new Int32Array(map.length);
+    for(let i=0;i<map.length;i++){ finalMap[i] = map[i]>0 ? remap[map[i]] : 0; }
+
+    {
+      const queue = [];
+      for(let i=0;i<finalMap.length;i++){ if(finalMap[i]>0) queue.push(i); }
+      let qh=0;
+      while(qh<queue.length){
+        const cur=queue[qh++];
+        const cx = cur % w, cy = (cur-cx)/w;
+        const id = finalMap[cur];
+        if(cx>0){ const nb=cur-1; if(finalMap[nb]===0 && state.maskData[nb]){ finalMap[nb]=id; queue.push(nb); } }
+        if(cx<w-1){ const nb=cur+1; if(finalMap[nb]===0 && state.maskData[nb]){ finalMap[nb]=id; queue.push(nb); } }
+        if(cy>0){ const nb=cur-w; if(finalMap[nb]===0 && state.maskData[nb]){ finalMap[nb]=id; queue.push(nb); } }
+        if(cy<h-1){ const nb=cur+w; if(finalMap[nb]===0 && state.maskData[nb]){ finalMap[nb]=id; queue.push(nb); } }
+      }
+    }
+    let pieceCount = newId-1;
+    for(let start=0; start<finalMap.length; start++){
+      if(finalMap[start]!==0 || !state.maskData[start]) continue;
+      pieceCount++;
+      const id = pieceCount;
+      const queue=[start]; finalMap[start]=id;
+      let qh=0;
+      while(qh<queue.length){
+        const cur=queue[qh++];
+        const cx = cur % w, cy = (cur-cx)/w;
+        if(cx>0){ const nb=cur-1; if(finalMap[nb]===0 && state.maskData[nb]){ finalMap[nb]=id; queue.push(nb); } }
+        if(cx<w-1){ const nb=cur+1; if(finalMap[nb]===0 && state.maskData[nb]){ finalMap[nb]=id; queue.push(nb); } }
+        if(cy>0){ const nb=cur-w; if(finalMap[nb]===0 && state.maskData[nb]){ finalMap[nb]=id; queue.push(nb); } }
+        if(cy<h-1){ const nb=cur+w; if(finalMap[nb]===0 && state.maskData[nb]){ finalMap[nb]=id; queue.push(nb); } }
+      }
+    }
+
+    if(pieceCount===0){
+      alert('ピースを検出できませんでした。線の位置を見直してください。');
+      return;
+    }
+
+    state.pieceMap = finalMap;
+    state.pieces = {};
+    state.rows = [];
+    for(let id=1; id<=pieceCount; id++){
+      state.pieces[id] = {text:'', count:0, initValue:0, hidden:false, numberVisible:false};
+      state.rows.push({rowNum:id, pieceId:id});
+    }
+    state.confirmed = true;
+    for(const k in centroidCache) delete centroidCache[k];
+
+    gridToolbar.hidden = true; freeToolbar.hidden = true;
+    doneToolbar.hidden = false;
+    el('doneHint').textContent = 'ピース数 ' + pieceCount;
+    el('pieceCountTag').textContent = pieceCount + '個';
+    sidebar.hidden = false;
+    buildSidebar();
+    drawOverlay();
+  }
+
+  // ---------- sidebar ----------
+  function buildSidebar(){
+    const list = el('pieceList');
+    list.innerHTML = '';
+    state.rows.forEach((row, idx)=>{
+      const p = state.pieces[row.pieceId];
+      const wrap = document.createElement('div');
+      wrap.className='pieceRow';
+      wrap.innerHTML = `
+        <div class="numBadge" data-idx="${idx}">${String(row.rowNum).padStart(2,'0')}</div>
+        <input type="text" class="rowLabel" data-idx="${idx}" placeholder="テキスト" style="flex:2;min-width:120px;">
+        <button class="small minus" data-idx="${idx}">−</button>
+        <span class="countDisp" data-idx="${idx}">0</span>
+        <button class="small plus" data-idx="${idx}">＋</button>
+        <input type="number" class="miniInput initInput" data-idx="${idx}" value="3" min="0">
+        <button class="small setBtn" data-idx="${idx}">設定</button>
+        <button class="small resetBtn" data-idx="${idx}">リセット</button>
+      `;
+      list.appendChild(wrap);
+    });
+    list.querySelectorAll('.numBadge').forEach(b=> b.addEventListener('click', onBadgeClick));
+    list.querySelectorAll('.rowLabel').forEach(inp=> inp.addEventListener('input', onTextInput));
+    list.querySelectorAll('.minus').forEach(b=> b.addEventListener('click', ()=>bump(b.dataset.idx,-1)));
+    list.querySelectorAll('.plus').forEach(b=> b.addEventListener('click', ()=>bump(b.dataset.idx,1)));
+    list.querySelectorAll('.setBtn').forEach(b=> b.addEventListener('click', onSetClick));
+    list.querySelectorAll('.resetBtn').forEach(b=> b.addEventListener('click', onResetClick));
+  }
+
+  function onTextInput(e){
+    const idx = +e.target.dataset.idx;
+    const row = state.rows[idx];
+    state.pieces[row.pieceId].text = e.target.value;
+    drawOverlay();
+  }
+
+  function bump(idx, delta){
+    idx=+idx;
+    const row = state.rows[idx];
+    const p = state.pieces[row.pieceId];
+    p.count = Math.max(0, p.count+delta);
+    refreshCountDisplay(idx);
+    applyPieceVisibility(row.pieceId);
+  }
+
+  function onSetClick(e){
+    const idx = +e.target.dataset.idx;
+    const row = state.rows[idx];
+    const initInput = e.target.parentElement.querySelector('.initInput');
+    const val = Math.max(0, parseInt(initInput.value)||0);
+    const p = state.pieces[row.pieceId];
+    p.initValue = val; p.count = val; p.numberVisible = true;
+    if(val>0) p.hidden=false;
+    refreshCountDisplay(idx);
+    applyPieceVisibility(row.pieceId);
+  }
+  function onResetClick(e){
+    const idx = +e.target.dataset.idx;
+    const row = state.rows[idx];
+    const p = state.pieces[row.pieceId];
+    p.count = p.initValue;
+    if(p.initValue>0) p.hidden=false;
+    refreshCountDisplay(idx);
+    applyPieceVisibility(row.pieceId);
+  }
+  function refreshCountDisplay(idx){
+    const row = state.rows[idx];
+    const p = state.pieces[row.pieceId];
+    const disp = el('pieceList').querySelector('.countDisp[data-idx="'+idx+'"]');
+    if(disp) disp.textContent = p.count;
+    drawOverlay();
+  }
+
+  function applyPieceVisibility(pieceId){
+    const p = state.pieces[pieceId];
+    const shouldHide = p.count<=0 && p.numberVisible;
+    if(shouldHide !== p.hidden){
+      p.hidden = shouldHide;
+      recomputeTop();
+    } else {
+      drawOverlay();
+    }
+  }
+
+  function recomputeTop(){
+    const w=state.w,h=state.h;
+    const imgData = new ImageData(new Uint8ClampedArray(state.panelData.data), w, h);
+    const hiddenIds = new Set(Object.keys(state.pieces).filter(id=>state.pieces[id].hidden).map(Number));
+    if(hiddenIds.size){
+      const map = state.pieceMap;
+      for(let i=0;i<w*h;i++){
+        if(hiddenIds.has(map[i])){ imgData.data[i*4+3]=0; }
+      }
+    }
+    topCanvas.getContext('2d').putImageData(imgData,0,0);
+    drawOverlay();
+  }
+
+  function onBadgeClick(e){
+    const idx = +e.currentTarget.dataset.idx;
+    if(state.linkingRowIndex === idx){ state.linkingRowIndex = null; }
+    else { state.linkingRowIndex = idx; }
+    document.querySelectorAll('.numBadge').forEach(b=>b.classList.remove('linking'));
+    if(state.linkingRowIndex!==null){
+      e.currentTarget.classList.add('linking');
+    }
+    drawOverlay();
+  }
+
+  function onStagePointerDownConfirmed(e){
+    if(state.linkingRowIndex===null) return;
+    const p = canvasPoint(e, overlayCanvas);
+    const clickedPieceId = pieceIdAt(p.x, p.y);
+    if(clickedPieceId===0) return;
+    const rowIdx = state.linkingRowIndex;
+    const targetRow = state.rows[rowIdx];
+    const otherRow = state.rows.find(r=> r.pieceId===clickedPieceId);
+    if(otherRow && otherRow!==targetRow){
+      const tmp = targetRow.pieceId;
+      targetRow.pieceId = otherRow.pieceId;
+      otherRow.pieceId = tmp;
+    } else {
+      targetRow.pieceId = clickedPieceId;
+    }
+    state.linkingRowIndex = null;
+    document.querySelectorAll('.numBadge').forEach(b=>b.classList.remove('linking'));
+    drawOverlay();
+  }
+
+  // ---------- export ----------
+  el('exportBtn').addEventListener('click', ()=>{
+    const out = document.createElement('canvas');
+    out.width = state.w; out.height = state.h;
+    const octx = out.getContext('2d');
+    octx.drawImage(baseCanvas,0,0);
+    octx.drawImage(topCanvas,0,0);
+    octx.drawImage(overlayCanvas,0,0);
+    out.toBlob(blob=>{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'panel_open.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 3000);
+    }, 'image/png');
+  });
+
+  el('textFont').addEventListener('change', e=>{ if(state){ state.textFont=e.target.value; drawOverlay(); } });
+  el('textSize').addEventListener('input', e=>{ if(state){ state.textSize=parseInt(e.target.value)||32; drawOverlay(); } });
+  el('textColor').addEventListener('input', e=>{ if(state){ state.textColor=e.target.value; drawOverlay(); } });
+
+  document.querySelectorAll('input[name=split]').forEach(r=>{
+    r.addEventListener('change', ()=>{
+      el('gridInputs').style.display = document.querySelector('input[name=split]:checked').value==='grid' ? '' : 'none';
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
