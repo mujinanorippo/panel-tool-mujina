@@ -325,11 +325,29 @@ button:disabled{opacity:.4; cursor:not-allowed;}
       if(state.split==='grid'){ drawGridLinesOverlay(ctx); }
       else { drawFreehandOverlay(ctx); }
     } else {
+      drawPieceBoundaries(ctx);
       drawPieceLabels(ctx);
     }
   }
 
   function drawGridLinesOverlay(ctx){
+    ctx.save();
+    // シルエット部分だけにクリッピング
+    if(state.maskData){
+      const clipCanvas = document.createElement('canvas');
+      clipCanvas.width = state.w; clipCanvas.height = state.h;
+      const cctx = clipCanvas.getContext('2d');
+      const imgd = cctx.createImageData(state.w, state.h);
+      for(let i=0;i<state.w*state.h;i++){
+        if(state.maskData[i]){
+          imgd.data[i*4]=0; imgd.data[i*4+1]=0; imgd.data[i*4+2]=0; imgd.data[i*4+3]=255;
+        }
+      }
+      cctx.putImageData(imgd,0,0);
+      ctx.globalCompositeOperation='source-over';
+      ctx.drawImage(clipCanvas,0,0);
+      ctx.globalCompositeOperation='source-atop';
+    }
     ctx.strokeStyle = state.lineColor; ctx.lineWidth = 2;
     for(const fx of state.gridLinesX){
       const x = fx*state.w;
@@ -339,10 +357,35 @@ button:disabled{opacity:.4; cursor:not-allowed;}
       const y = fy*state.h;
       ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(state.w,y); ctx.stroke();
     }
+    ctx.globalCompositeOperation='source-over';
+    ctx.restore();
   }
 
   function drawFreehandOverlay(ctx){
     ctx.drawImage(state.barrierCanvas,0,0);
+  }
+
+  function drawPieceBoundaries(ctx){
+    if(!state.pieceMap) return;
+    const w = state.w, h = state.h;
+    const imgd = ctx.createImageData(w, h);
+    const col = hexToRgb(state.lineColor);
+    for(let y=0; y<h; y++){
+      for(let x=0; x<w; x++){
+        const i = y*w+x;
+        const pid = state.pieceMap[i];
+        if(pid===0) continue;
+        let edge = false;
+        if(x>0   && state.pieceMap[i-1]!==pid && state.pieceMap[i-1]!==0) edge=true;
+        if(x<w-1 && state.pieceMap[i+1]!==pid && state.pieceMap[i+1]!==0) edge=true;
+        if(y>0   && state.pieceMap[i-w]!==pid && state.pieceMap[i-w]!==0) edge=true;
+        if(y<h-1 && state.pieceMap[i+w]!==pid && state.pieceMap[i+w]!==0) edge=true;
+        if(edge){
+          imgd.data[i*4]=col.r; imgd.data[i*4+1]=col.g; imgd.data[i*4+2]=col.b; imgd.data[i*4+3]=255;
+        }
+      }
+    }
+    ctx.putImageData(imgd,0,0);
   }
 
   function drawPieceLabels(ctx){
